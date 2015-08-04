@@ -1,51 +1,44 @@
-from pythonosc import osc_server
-from pythonosc import osc_packet
+from forwarder import OSCUDPServerForwarder
+import npyscreen
+from collections import defaultdict
 
-import threading
-import socketserver
-import socket
+import logging
+logging.disable(logging.CRITICAL)
 
-class SimpleUDPClient(object):
-  def __init__(self, address, port):
-    self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    self._sock.setblocking(0)
-    self._address = address
-    self._port = port
+class OscDataPresenter:
+  def __init__(self, serverA, serverB):
+    self.serverA = serverA
+    self.serverB = serverB
 
-  def send(self, content):
-    self._sock.sendto(content, (self._address, self._port))
+  def cols(self):
+    return ["Address", self.serverA.identifier, self.serverB.identifier]
 
-class UDPForwarderHandler(socketserver.BaseRequestHandler):
-  def handle(self):
-    data = self.request[0]
-    self.server.out.send(data)
+  def data(self):
+    d = defaultdict(lambda: list([None, None]))
 
-    try:
-      self.async_print(osc_packet.OscPacket(data))
-    except osc_packet.ParseError:
-      pass
+    for k,v in self.serverA.vals.items():
+      d[k][0] = v
 
-  def async_print(self, packet):
-    thread = threading.Thread(target=self.print, args=(packet, self.server.identifier))
-    thread.daemon = True
-    thread.start()
+    for k,v in self.serverB.vals.items():
+      d[k][1] = v
 
-  def print(self, packet, identifier):
-    for timed_msg in packet.messages:
-      vals = ", ".join(map(str, timed_msg.message))
-      print("[{0}] [{1}] -- {{{2}}}".format(identifier, timed_msg.message.address, vals))
+    data = [item for k in sorted(d) for item in (k, d[k][0], d[k][1])]
+    return data
 
-class OSCUDPServerForwarder(socketserver.UDPServer):
-  def __init__(self, identifier, server_address, destination):
-    super().__init__(server_address, UDPForwarderHandler)
-    self.out = SimpleUDPClient(*destination)
-    self.identifier = identifier
+class OscSpyApp(npyscreen.NPSAppManaged):
+  def onStart(self):
+    self.mainForm = self.addForm('MAIN', MainForm)
 
-  def start(self):
-    self.thread = threading.Thread(target=self.serve_forever)
-    self.thread.daemon = True
-    self.thread.start()
+class MainForm(npyscreen.Form):
+  def create(self):
+    self.keypress_timeout = 10
+    self.presenter = OscDataPresenter(controller_to_server, server_to_controller)
+    cols = self.presenter.cols()
+    self.grid = self.add(npyscreen.GridColTitles, col_titles=cols, select_whole_line=True, columns=len(cols))
 
+  def while_waiting(self):
+    self.grid.set_grid_values_from_flat_list(self.presenter.data(), reset_cursor=False)
+    self.grid.display()
 
 controller_ip = "192.168.0.105"
 server_ip = "0.0.0.0"
@@ -61,5 +54,4 @@ server_to_controller = OSCUDPServerForwarder("Resolume", (server_ip, 8000), (con
 controller_to_server.start()
 server_to_controller.start()
 
-while True:
-  pass
+OscSpyApp().run()
