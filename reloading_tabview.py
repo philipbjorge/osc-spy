@@ -706,7 +706,7 @@ class Viewer:
             keys_handled = self.handle_keys()
 
             elapsed = datetime.datetime.now() - started
-            if elapsed.total_seconds() > 3.0:
+            if elapsed.total_seconds() > 1.0:
               self.reload()
 
     def handle_keys(self):
