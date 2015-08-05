@@ -1,6 +1,6 @@
 from forwarder import OSCUDPServerForwarder
-import npyscreen
 from collections import defaultdict
+import reloading_tabview as t
 
 import logging
 logging.disable(logging.CRITICAL)
@@ -22,23 +22,9 @@ class OscDataPresenter:
     for k,v in self.serverB.vals.items():
       d[k][1] = v
 
-    data = [item for k in sorted(d) for item in (k, d[k][0], d[k][1])]
+    data = [[k, d[k][0], d[k][1]] for k in sorted(d)]
+    data.insert(0, self.cols())
     return data
-
-class OscSpyApp(npyscreen.NPSAppManaged):
-  def onStart(self):
-    self.mainForm = self.addForm('MAIN', MainForm)
-
-class MainForm(npyscreen.Form):
-  def create(self):
-    self.keypress_timeout = 10
-    self.presenter = OscDataPresenter(controller_to_server, server_to_controller)
-    cols = self.presenter.cols()
-    self.grid = self.add(npyscreen.GridColTitles, col_titles=cols, select_whole_line=True, columns=len(cols))
-
-  def while_waiting(self):
-    self.grid.set_grid_values_from_flat_list(self.presenter.data(), reset_cursor=False)
-    self.grid.display()
 
 controller_ip = "192.168.0.105"
 server_ip = "0.0.0.0"
@@ -54,4 +40,6 @@ server_to_controller = OSCUDPServerForwarder("Resolume", (server_ip, 8000), (con
 controller_to_server.start()
 server_to_controller.start()
 
-OscSpyApp().run()
+presenter = OscDataPresenter(controller_to_server, server_to_controller)
+
+t.view(presenter.data)
